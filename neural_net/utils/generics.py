@@ -47,7 +47,7 @@ def saveModelToFile(self, filename:Path = None, optimizer = None, loss = None, e
         print(optimizer)
         print(loss)
         print(epoch)
-        print("All 3 optional arguments (optimizer, loss, and epoch) must be provided to save a model checkpoint")
+        print("Model checkpoint not saved - all 3 optional arguments (optimizer, loss, and epoch) must be provided to save a model checkpoint")
 
 def loadModelFromFile(optim:str=None, learning_rate:float=0.001, device=torch.device("cpu")):
     
@@ -81,7 +81,7 @@ def loadModelFromFile(optim:str=None, learning_rate:float=0.001, device=torch.de
         optimizer = assignOptimizer(model, optim, learning_rate)
 
         # Load the checkpoint information into a dict
-        checkpoint = torch.load(filename)
+        checkpoint = torch.load(filename, map_location=torch.device('cpu'))
 
         # Assign the model, optimizer, and parameters their saved values
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -118,7 +118,7 @@ def path2name(model_path):
     assert model_path.exists(), f"The given filepath does not point to a file.\n{model_path}"
 
     # Extract the model type/name from the filename
-    model_name = model_path.stem.split('_')[1]
+    model_name = model_path.stem.split('_')[1].split('v')[0]
 
     return model_name
 
@@ -139,7 +139,8 @@ def _generate_model_save_name(model_name):
     model_save_path = Path(model_save_path).absolute()
 
     # Pattern for any models trained in the past
-    filename_pattern = r"\d{8}_\w+_(\d+).pt[h]?"
+    # filename_pattern = r"\d{8}_\w+_(\d+).pt[h]?"
+    filename_pattern = r"\w+?v(\d+).pt"
     r = re.compile(filename_pattern)
 
     # Search through all files and subdirectories in model_save_path
@@ -155,7 +156,7 @@ def _generate_model_save_name(model_name):
     matched_files = []
     for fname in prev_model_files:
         try:
-            matched_files = [int(fname.split('.')[0].split('_')[-1])]
+            matched_files.extend([int(fname.split('.')[0].split('v')[-1])])
         except ValueError: # except if you cannot convert to int
             continue
     
@@ -166,6 +167,6 @@ def _generate_model_save_name(model_name):
         prev_model_count = 0
 
     model_save_path = model_save_path / \
-        f"{datetime.today().strftime(r'%Y%m%d')}_{model_name}_{prev_model_count+1}.pt"
+        f"{model_name}v{prev_model_count+1}.pt"
     
     return model_save_path

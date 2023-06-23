@@ -1,10 +1,15 @@
 import re
 import pandas as pd
 import numpy as np
-from tkinter.filedialog import askopenfilenames
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import os
+from pathlib import Path
+try:
+    from tkinter.filedialog import askopenfilenames
+    has_tkinter = True
+except:
+    has_tkinter = False
 
 def loadCSV(filepath:os.PathLike):
 
@@ -17,40 +22,36 @@ def loadCSV(filepath:os.PathLike):
     df.rename(columns={"Unnamed: 0":"index"}, inplace=True)
     df.set_index("index", inplace=True)
 
-    # # Find the first column that has reflectance data
-    # # i.e. a column name that can be converted to a float
-    # for idx, colname in enumerate(df.columns):
-    #     try:
-    #         float(colname)
-    #         break
-    #     except ValueError:
-    #         continue
-    # # print("The variable `idx-1` points to the column '", df.columns[idx-1], "'", sep='')
-
-    # # Split the dataframe at `idx` into metadata and data tables
-    # metadata = df.iloc[:, :idx]
-    # data = df.iloc[:, [1,2]+list(range( idx-1, len(df.columns) ))] # include the path column in data for train/test split
-    
-    metadata, data = cleanData(df)
-
-    return metadata, data
+    return df
 
 def getData():
 
     # Get the filenames
-    data_paths = askopenfilenames(title = "Select data file", defaultextension = ".csv", initialdir=os.getcwd())
+    if has_tkinter:
+        data_paths = askopenfilenames(title = "Select data file", defaultextension = ".csv", initialdir=os.getcwd())
+    else:
+        keep_asking = True
+        data_paths = []
+        while keep_asking:
+            p = Path( input("\nEnter an absolute file path: ") ).absolute()
+            data_paths.append(p)
+            keep_asking = input("Add another path? [y/n]".lower()[0]) == 'y'
+
+        # Reset the value of p so that the error message in the assert statement doesn't arbitrarily point to the last file inputted
+        p = None
+        assert all( [p.exists() for p in data_paths] ), f"At least one of the paths\n{p}\nwas invalid, please make sure all the paths point to files that exist"
 
     # Load the Data
-    meta_dfs, data_dfs = [], []
+    data_dfs = []
     for f in data_paths:
-        m, d = loadCSV(f)
-        meta_dfs.append(m)
+        d = loadCSV(f)
         data_dfs.append(d)
 
-    metadata = pd.concat(meta_dfs)
+    metadata = None
     data = pd.concat(data_dfs)
 
-    return metadata, data
+    # return data, metadata
+    return data
 
 def cleanData(df:pd.DataFrame):
 
@@ -71,55 +72,12 @@ def cleanData(df:pd.DataFrame):
     # select columns not in the list
     metadata = df.loc[:, ~df.columns.isin(selected_cols)]
 
-    # # Find the first column that has reflectance data
-    # # i.e. a column name that can be converted to a float
-    # for idx, colname in enumerate(df.columns):
-    #     try:
-    #         float(colname)
-    #         break # When you find the first column name that doesn't error out, break the loop
-    #     except ValueError:
-    #         continue # if you cannot convert to float, keep the loop going with the next column name
-        
-    # # print("The variable `idx-1` points to the column '", df.columns[idx-1], "'", sep='')
-
-    # # Split the dataframe at `idx` into metadata and data tables
-    # metadata = df.iloc[:, :idx]
-    # data = df.iloc[:, [1,2]+list(range( idx, len(df.columns) ))] # include the path column in data for train/test split
-
     return metadata, data
 
-def splitData(data:pd.DataFrame, train_frac:float = 0.75, val_frac:float = 0.2, shuffle:bool = True, seed:int=None, is_dual_out:bool=True):
+def splitData(data:pd.DataFrame, train_frac:float = 0.8, val_frac:float = 0.15, shuffle:bool = True, is_dual_out:bool=False, seed_val:int=1):
 
-    # Shuffle the dataset using pd.DataFrame.sample
-    if shuffle:
-        if seed is not None:
-            data = data.sample(frac=1, random_state=seed)
-        else:
-            data = data.sample(frac=1)
-        # frac = 1 means return the entire dataset instead of a smaller fraction of it
-    
-    # Define the labels, i.e. true values that we will try to predict
-    if is_dual_out:
-        labels = data[["fructose_mgdl", "glucose_mgdl"]]
-    else:
-        labels = data["fructose_mgdl"]
-
-    # Drop the fructose_mgdl and glucose_mgdl columns from the data
-    data.drop(["fructose_mgdl", "glucose_mgdl"], axis=1, inplace=True)
-        
-    # Define the split parameters
-    split_params = [int( train_frac*len(data) ), int( (train_frac + val_frac)*len(data) )]
-
-    # Split the dataframe according to the params
-    inputs_train, inputs_val, inputs_test = np.split(data, split_params)
-    # Split the labels along the same params
-    labels_train, labels_val, labels_test = np.split(labels, split_params)
-
-    return (inputs_train.to_numpy(), labels_train.to_numpy()), \
-        (inputs_val.to_numpy(), labels_val.to_numpy()), \
-            (inputs_test.to_numpy(), labels_test.to_numpy())
-
-def splitData2(data:pd.DataFrame, train_frac:float = 0.85, val_frac:float = 0.14, shuffle:bool = True, is_dual_out:bool=True):
+    # Set the seed for numpy.random
+    np.random.seed(seed_val)
 
     # Get unique images
     unique_images = pd.unique(data['path'])
@@ -141,7 +99,7 @@ def splitData2(data:pd.DataFrame, train_frac:float = 0.85, val_frac:float = 0.14
         split_data = data.loc[ data['path'].isin(images_part) ]
 
         # Remove all the metadata columns that we don't need
-        split_data = cleanData(split_data)[-1]
+        split_metadata, split_data = cleanData(split_data)
 
         # Define the labels, i.e. true values that we will try to predict
         if is_dual_out:

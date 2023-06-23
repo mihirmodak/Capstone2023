@@ -75,35 +75,41 @@ def train(model, train_loader:DataLoader, val_loader:DataLoader, epochs:int, cri
             rmse = np.sqrt( mean_squared_error(y_true=labels_batch_np, y_pred=outputs_batch_np) )
             r2 = r2_score(y_true=labels_batch_np, y_pred=outputs_batch_np)
 
-            # Log the loss value to plot later
-            writer.add_scalar("Loss/train", loss, epoch)
-            writer.add_scalar("Mean Absolute Error/train", mae, epoch)
-            writer.add_scalar("Root Mean Squared Error/train", rmse, epoch)
-            writer.add_scalar("R2 Value/train", r2, epoch)
-
-            # Calculate the validation metrics
-            val_inputs_batch, val_labels_batch = val_loader[i]
-            val_outputs_batch = model(val_inputs_batch)
-            if val_labels_batch.shape[-1] != val_outputs_batch.shape[-1]:
-                val_labels_batch = val_labels_batch.unsqueeze(1)
-            val_loss = criterion(val_outputs_batch, val_labels_batch)
-            val_labels_batch_np = val_labels_batch.detach().cpu().numpy()
-            val_outputs_batch_np = val_outputs_batch.detach().cpu().numpy()
-
-            val_mae = mean_absolute_error(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np)
-            val_rmse = np.sqrt( mean_squared_error(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np) )
-            val_r2 = r2_score(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np)
-
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("Mean Absolute Error/val", val_mae, epoch)
-            writer.add_scalar("Root Mean Squared Error/val", val_rmse, epoch)
-            writer.add_scalar("R2 Value/val", val_r2, epoch)
+            # # Log the loss value to plot later
+            # writer.add_scalar("Loss/train", loss, epoch)
+            # writer.add_scalar("Mean Absolute Error/train", mae, epoch)
+            # writer.add_scalar("Root Mean Squared Error/train", rmse, epoch)
+            # writer.add_scalar("R2 Value/train", r2, epoch)
 
             # Print statistics
             running_loss += loss.item()
             if i % 100 == 99:    # print every 100 mini-batches
                 print(f"[{epoch+1}, {i+1}] loss: {running_loss/100} mae:{mae} r2: {r2}")
                 running_loss = 0.0 # Recalculate loss for every mini-batch
+
+        # Log the loss value to plot later
+        writer.add_scalar("Loss/train", loss, epoch)
+        writer.add_scalar("Mean Absolute Error/train", mae, epoch)
+        writer.add_scalar("Root Mean Squared Error/train", rmse, epoch)
+        writer.add_scalar("R2 Value/train", r2, epoch)
+
+        # Calculate the validation metrics
+        with torch.no_grad():
+            for val_inputs_batch, val_labels_batch in val_loader:
+                val_outputs_batch = model(val_inputs_batch)
+                if val_labels_batch.shape[-1] != val_outputs_batch.shape[-1]:
+                    val_labels_batch = val_labels_batch.unsqueeze(1)
+                val_loss = criterion(val_outputs_batch, val_labels_batch)
+                val_labels_batch_np = val_labels_batch.detach().cpu().numpy()
+                val_outputs_batch_np = val_outputs_batch.detach().cpu().numpy()
+
+                val_mae = mean_absolute_error(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np)
+                val_rmse = np.sqrt( mean_squared_error(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np) )
+                val_r2 = r2_score(y_true=val_labels_batch_np, y_pred=val_outputs_batch_np)
+                writer.add_scalar("Loss/val", val_loss, epoch)
+                writer.add_scalar("Mean Absolute Error/val", val_mae, epoch)
+                writer.add_scalar("Root Mean Squared Error/val", val_rmse, epoch)
+                writer.add_scalar("R2 Value/val", val_r2, epoch)
 
         # if early_stopper.early_stop(running_loss):
         #     print(f"EarlyStopping: Stopped training at epoch {epoch}.")
@@ -166,7 +172,7 @@ def start(args:dict, loss_fn:Callable = nn.MSELoss, optim:str = "adam"):
     data_df = utils.getData()
 
     # Create the training/validation/testing split
-    splits = utils.splitData(data_df, is_dual_out= num_output_nodes == 2)[-1] # seed = 1, train_frac = 0.75, val_frac = 0.2, shuffle = True,
+    splits = utils.splitData(data_df, is_dual_out= num_output_nodes == 2) # seed = 1, train_frac = 0.75, val_frac = 0.2, shuffle = True,
     (inputs_train, labels_train), (inputs_val, labels_val), (inputs_test, labels_test) = splits
 
     # Create the PyTorch Datasets and Data Loaders
@@ -186,7 +192,8 @@ def start(args:dict, loss_fn:Callable = nn.MSELoss, optim:str = "adam"):
     # Train the model
     net, optimizer, loss, epoch = train(
         model = net, 
-        data_loader = train_loader, 
+        train_loader = train_loader,
+        val_loader = val_loader,
         epochs = int(args['epochs']), 
         criterion=criterion,
         optimizer=optimizer
@@ -200,8 +207,8 @@ def start(args:dict, loss_fn:Callable = nn.MSELoss, optim:str = "adam"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["new", "continue"])
-    parser.add_argument("--model_name", help="The name of the class in models.py to initialize and train", required=False)
+    parser.add_argument("mode", choices=["new", "continue"], help="Whether to train a new model or continue training a previously saved model")
+    parser.add_argument("model_name", help="The name of the class in models.py to initialize and train", default="H4O1")
     parser.add_argument("--epochs", help="The number of epochs to run training", default=50)
     parser.add_argument("-lr", "--learning_rate", help="The learning rate to use in training", default=0.001)
     parser.add_argument("--dropout", help="The proportion of neurons to drop temporarily during every epoch", required=False, default=0.5)

@@ -79,7 +79,8 @@ def plot_agg(results, args:dict=None):
     ax.plot(unique_labels, unique_labels, 'r')
     ax.set_xlabel("True Concentration (mg/dL)")
     ax.set_ylabel("Predicted Concentration (mg/dL)")
-    ax.set_title(f"Fructose Concentration with R^2={round(r2_score(y_true=unique_labels, y_pred=pred_means), 5)}")
+    # ax.set_title(f"Fructose Concentration with R^2={round(r2_score(y_true=unique_labels, y_pred=pred_means), 5)}")
+    ax.set_title(f"Fructose Concentration")
 
     plt.show()
 
@@ -125,7 +126,8 @@ def plot_multiple(results, args=None):
         if results.shape[-1] == 2:
             ax.set_title(f"Fructose Concentration for Glucose = {curr_glucose_conc} mg/dL")
         else:
-            ax.set_title(f"Fructose Concentration with R^2={round(r2_score(y_true=curr_labels, y_pred=curr_preds), 5)}")
+            # ax.set_title(f"Fructose Concentration with R^2={round(r2_score(y_true=curr_labels, y_pred=curr_preds), 5)}")
+            ax.set_title(f"Fructose Concentration")
 
     plt.show()
 
@@ -158,6 +160,7 @@ def main(args:dict=None):
         plot_agg(results, args)
     elif args['aggregation'] == "none":
         plot(results)
+        
     # print( r2_score(y_true=labels_test, y_pred=predictions) )
 
     return predictions, results
